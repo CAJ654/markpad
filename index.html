@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>markpad — Live Markdown Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0D1117;
+  --surface:  #161B22;
+  --surface2: #21262D;
+  --border:   #30363D;
+  --text:     #E6EDF3;
+  --muted:    #8B949E;
+  --faint:    #3D444D;
+  --accent:   #58A6FF;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.header {
+  height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.025em;
+  color: var(--accent);
+}
+.logo-dot { color: #3FB950; }
+
+.badge {
+  font-size: 10.5px;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 9px;
+  letter-spacing: 0.02em;
+}
+
+.header-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ── App layout ── */
+.app {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Palette ── */
+.palette {
+  width: 192px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 10px 8px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface2) transparent;
+}
+.palette::-webkit-scrollbar { width: 4px; }
+.palette::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+
+.palette-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 2px 6px 10px;
+}
+
+.cat { margin-bottom: 6px; }
+
+.cat-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 5px 4px 5px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.cat-label:hover { color: var(--text); }
+.cat-line { flex: 1; height: 1px; background: var(--border); }
+
+/* Chevron arrow */
+.cat-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.22s ease, opacity 0.15s;
+}
+.cat-label:hover .cat-chevron { opacity: 0.85; }
+.cat.collapsed .cat-chevron { transform: rotate(-90deg); }
+
+/* Collapsible body */
+.cat-body {
+  overflow: hidden;
+  max-height: 300px;
+  opacity: 1;
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity    0.2s  ease;
+  padding-bottom: 8px;
+}
+.cat.collapsed .cat-body {
+  max-height: 0;
+  opacity: 0;
+  padding-bottom: 0;
+}
+
+/* Block tiles */
+.block {
+  display: block;
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  padding: 7px 10px 7px 13px;
+  border-radius: 6px;
+  margin-bottom: 3px;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  border: 1px solid transparent;
+  position: relative;
+  transition: transform 0.12s ease, filter 0.12s ease;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.block::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 6px 0 0 6px;
+}
+.block:hover  { transform: translateX(3px); filter: brightness(1.25); }
+.block:active { transform: translateX(3px) scale(0.96); }
+
+/* Notch connector (code.org style visual cue) */
+.block::after {
+  content: '';
+  position: absolute;
+  right: 7px; top: 50%;
+  transform: translateY(-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  opacity: 0.35;
+}
+
+/* Category color tokens */
+.cat-h  .block { background:#1e0e35; color:#c084fc; border-color:#3a186a; }
+.cat-h  .block::before { background:#a855f7; }
+.cat-h  .block::after  { background:#a855f7; }
+
+.cat-tx .block { background:#0c2040; color:#60a5fa; border-color:#1a3a6a; }
+.cat-tx .block::before { background:#3b82f6; }
+.cat-tx .block::after  { background:#3b82f6; }
+
+.cat-cd .block { background:#261408; color:#fb923c; border-color:#5c2e0a; }
+.cat-cd .block::before { background:#f97316; }
+.cat-cd .block::after  { background:#f97316; }
+
+.cat-li .block { background:#082015; color:#4ade80; border-color:#0e3a20; }
+.cat-li .block::before { background:#22c55e; }
+.cat-li .block::after  { background:#22c55e; }
+
+.cat-bk .block { background:#111f05; color:#a3e635; border-color:#2a3d09; }
+.cat-bk .block::before { background:#84cc16; }
+.cat-bk .block::after  { background:#84cc16; }
+
+.cat-lk .block { background:#1f1500; color:#facc15; border-color:#3d2e00; }
+.cat-lk .block::before { background:#eab308; }
+.cat-lk .block::after  { background:#eab308; }
+
+/* ── Editor / Preview panes ── */
+.editor-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.pane + .pane { border-left: 1px solid var(--border); }
+
+.pane-header {
+  height: 34px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 7px;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pane-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+textarea#editor {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 18px 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px;
+  line-height: 1.8;
+  caret-color: var(--accent);
+  tab-size: 2;
+}
+textarea#editor::placeholder { color: var(--faint); }
+
+.preview-scroll {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface2) transparent;
+}
+.preview-scroll::-webkit-scrollbar { width: 5px; }
+.preview-scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+
+#preview {
+  padding: 20px 26px 48px;
+  font-size: 14.5px;
+  line-height: 1.8;
+}
+
+/* Preview typography */
+#preview h1 { font-size:1.9em; font-weight:700; color:var(--text); border-bottom:1px solid var(--border); padding-bottom:.3em; margin:.4em 0 .6em; }
+#preview h2 { font-size:1.45em; font-weight:600; color:var(--text); border-bottom:1px solid var(--border); padding-bottom:.25em; margin:.8em 0 .45em; }
+#preview h3 { font-size:1.15em; font-weight:600; color:var(--text); margin:.75em 0 .3em; }
+#preview p  { color:#C9D1D9; margin:.45em 0; }
+#preview strong { color:var(--text); }
+#preview em { font-style:italic; }
+#preview del { color:var(--muted); text-decoration:line-through; }
+#preview a   { color:var(--accent); text-decoration:none; }
+#preview a:hover { text-decoration:underline; }
+#preview img { max-width:100%; border-radius:6px; display:block; margin:10px 0; }
+#preview code {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.875em;
+  background:var(--surface);
+  color:#fb923c;
+  padding:2px 6px;
+  border-radius:4px;
+  border:1px solid var(--border);
+}
+#preview pre {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px 18px;
+  margin:12px 0;
+  overflow-x:auto;
+}
+#preview pre code {
+  background:none; border:none; padding:0;
+  color:#E6EDF3; font-size:.84em; line-height:1.65;
+}
+#preview ul, #preview ol { padding-left:22px; margin:6px 0; }
+#preview li { color:#C9D1D9; margin:3px 0; }
+#preview blockquote {
+  border-left:3px solid var(--accent);
+  background:#0c2040;
+  border-radius:0 6px 6px 0;
+  padding:8px 16px;
+  margin:10px 0;
+  color:#93c5fd;
+}
+#preview hr { border:none; border-top:1px solid var(--border); margin:18px 0; }
+#preview .spacer { height:.4em; }
+
+/* ── Status bar ── */
+.statusbar {
+  height: 26px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+  user-select: none;
+}
+.statusbar .stat { display:flex; align-items:center; gap:4px; }
+.statusbar .stat-icon { font-size:10px; opacity:.6; }
+
+/* Insert flash */
+@keyframes insertFlash {
+  0%   { background-color: var(--bg); }
+  25%  { background-color: #0c2040; }
+  100% { background-color: var(--bg); }
+}
+textarea#editor.flashing { animation: insertFlash .35s ease-out; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <span class="logo">mark<span class="logo-dot">●</span>pad</span>
+  <span class="badge">Live Preview</span>
+  <span class="header-hint">Click a block → types at cursor · or just start writing</span>
+</header>
+
+<!-- ── App ── -->
+<div class="app">
+
+  <!-- ── Syntax Block Palette ── -->
+  <div class="palette">
+    <div class="palette-title">Syntax Blocks</div>
+
+    <div class="cat cat-h">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Headings <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="h1"># H1</button>
+        <button class="block" data-id="h2">## H2</button>
+        <button class="block" data-id="h3">### H3</button>
+      </div>
+    </div>
+
+    <div class="cat cat-tx">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Formatting <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="bold">**bold**</button>
+        <button class="block" data-id="italic">*italic*</button>
+        <button class="block" data-id="bolditalic">***b+i***</button>
+        <button class="block" data-id="strike">~~strike~~</button>
+      </div>
+    </div>
+
+    <div class="cat cat-cd">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Code <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="codeinline">`inline`</button>
+        <button class="block" data-id="codeblock">```block```</button>
+      </div>
+    </div>
+
+    <div class="cat cat-li">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Lists <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="ul">- unordered</button>
+        <button class="block" data-id="ol">1. ordered</button>
+      </div>
+    </div>
+
+    <div class="cat cat-bk">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Blocks <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="quote">&gt; blockquote</button>
+        <button class="block" data-id="divider">— divider</button>
+      </div>
+    </div>
+
+    <div class="cat cat-lk">
+      <div class="cat-label">
+        <svg class="cat-chevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Links <div class="cat-line"></div>
+      </div>
+      <div class="cat-body">
+        <button class="block" data-id="link">[link](url)</button>
+        <button class="block" data-id="image">![image](url)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Editor + Preview ── -->
+  <div class="editor-area">
+
+    <div class="pane">
+      <div class="pane-header">
+        <div class="pane-dot" style="background:#F97316"></div>
+        Markdown
+      </div>
+      <textarea id="editor" spellcheck="false" autocomplete="off"
+        placeholder="Start writing Markdown, or click a block from the palette…"></textarea>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header">
+        <div class="pane-dot" style="background:#3FB950"></div>
+        Preview
+      </div>
+      <div class="preview-scroll">
+        <div id="preview"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Status bar ── -->
+<div class="statusbar">
+  <span class="stat"><span class="stat-icon">≡</span><span id="st-words">0 words</span></span>
+  <span class="stat"><span class="stat-icon">∑</span><span id="st-chars">0 chars</span></span>
+  <span class="stat"><span class="stat-icon">#</span><span id="st-lines">1 line</span></span>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────
+   Block insertion map
+───────────────────────────────────────────── */
+const BLOCKS = {
+  h1:         '\n# Heading 1\n',
+  h2:         '\n## Heading 2\n',
+  h3:         '\n### Heading 3\n',
+  bold:       '**Bold Text**',
+  italic:     '*Italic Text*',
+  bolditalic: '***Bold Italic***',
+  strike:     '~~Strikethrough~~',
+  codeinline: '`inline code`',
+  codeblock:  '\n```js\n// your code here\n```\n',
+  ul:         '\n- Item one\n- Item two\n- Item three\n',
+  ol:         '\n1. First\n2. Second\n3. Third\n',
+  quote:      '\n> Blockquote text\n',
+  divider:    '\n---\n',
+  link:       '[Link Text](https://example.com)',
+  image:      '![Alt Text](https://example.com/image.png)',
+};
+
+/* ─────────────────────────────────────────────
+   HTML escape
+───────────────────────────────────────────── */
+function esc(s) {
+  return s
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;');
+}
+
+/* ─────────────────────────────────────────────
+   Inline Markdown → HTML  (regex-based)
+───────────────────────────────────────────── */
+function inline(s) {
+  s = esc(s);
+  // images before links (order matters)
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
+    '<img src="$2" alt="$1">');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // inline code
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // bold+italic, bold, italic, strikethrough (longest match first)
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+  s = s.replace(/~~(.+?)~~/g,         '<del>$1</del>');
+  return s;
+}
+
+/* ─────────────────────────────────────────────
+   Block Markdown → HTML  (line-by-line)
+───────────────────────────────────────────── */
+function parse(md) {
+  const lines = md.split('\n');
+  let out   = '';
+  let inUL  = false;
+  let inOL  = false;
+  let inPre = false;
+  let preLang = '';
+  let preBuf  = [];
+
+  const closeUL = () => { if (inUL) { out += '</ul>\n';  inUL = false; } };
+  const closeOL = () => { if (inOL) { out += '</ol>\n';  inOL = false; } };
+  const closeList = () => { closeUL(); closeOL(); };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+
+    /* ── fenced code block ── */
+    const fenceOpen  = !inPre && raw.match(/^```(\w*)\s*$/);
+    const fenceClose =  inPre && raw.match(/^```\s*$/);
+
+    if (fenceOpen) {
+      closeList();
+      inPre = true; preLang = fenceOpen[1]; preBuf = [];
+      continue;
+    }
+    if (fenceClose) {
+      const langAttr = preLang ? ` class="lang-${preLang}"` : '';
+      out += `<pre><code${langAttr}>${preBuf.map(esc).join('\n')}</code></pre>\n`;
+      inPre = false; preBuf = []; preLang = '';
+      continue;
+    }
+    if (inPre) { preBuf.push(raw); continue; }
+
+    /* ── unordered list ── */
+    if (/^[*\-+] /.test(raw)) {
+      closeOL();
+      if (!inUL) { out += '<ul>\n'; inUL = true; }
+      out += `<li>${inline(raw.slice(2))}</li>\n`;
+      continue;
+    }
+
+    /* ── ordered list ── */
+    if (/^\d+\. /.test(raw)) {
+      closeUL();
+      if (!inOL) { out += '<ol>\n'; inOL = true; }
+      out += `<li>${inline(raw.replace(/^\d+\.\s+/, ''))}</li>\n`;
+      continue;
+    }
+
+    closeList();
+
+    /* ── blank line ── */
+    if (!raw.trim()) {
+      out += '<div class="spacer"></div>\n';
+      continue;
+    }
+
+    /* ── ATX headings ── */
+    if (/^### /.test(raw)) { out += `<h3>${inline(raw.slice(4))}</h3>\n`; continue; }
+    if (/^## /.test(raw))  { out += `<h2>${inline(raw.slice(3))}</h2>\n`; continue; }
+    if (/^# /.test(raw))   { out += `<h1>${inline(raw.slice(2))}</h1>\n`; continue; }
+
+    /* ── blockquote ── */
+    if (/^> /.test(raw)) {
+      out += `<blockquote>${inline(raw.slice(2))}</blockquote>\n`;
+      continue;
+    }
+
+    /* ── horizontal rule ── */
+    if (/^-{3,}$/.test(raw.trim())) { out += '<hr>\n'; continue; }
+
+    /* ── paragraph ── */
+    out += `<p>${inline(raw)}</p>\n`;
+  }
+
+  closeList();
+  // close unclosed pre (graceful fallback)
+  if (inPre) {
+    out += `<pre><code>${preBuf.map(esc).join('\n')}</code></pre>\n`;
+  }
+
+  return out;
+}
+
+/* ─────────────────────────────────────────────
+   Render + status bar
+───────────────────────────────────────────── */
+const editor   = document.getElementById('editor');
+const preview  = document.getElementById('preview');
+const stWords  = document.getElementById('st-words');
+const stChars  = document.getElementById('st-chars');
+const stLines  = document.getElementById('st-lines');
+
+function render() {
+  const val = editor.value;
+  preview.innerHTML = parse(val);
+
+  const words = val.trim() ? val.trim().split(/\s+/).length : 0;
+  const lines = val.split('\n').length;
+  stWords.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+  stChars.textContent = `${val.length} char${val.length !== 1 ? 's' : ''}`;
+  stLines.textContent = `${lines} line${lines !== 1 ? 's' : ''}`;
+}
+
+editor.addEventListener('input', render);
+
+/* ─────────────────────────────────────────────
+   Block palette insertion
+───────────────────────────────────────────── */
+function insertAtCursor(text) {
+  const start  = editor.selectionStart;
+  const end    = editor.selectionEnd;
+  const before = editor.value.slice(0, start);
+  const after  = editor.value.slice(end);
+
+  // If the snippet leads with \n, skip it when we're already at a line start
+  let insert = text;
+  if (insert.startsWith('\n')) {
+    const atLineStart = !before.length || before.endsWith('\n');
+    if (atLineStart) insert = insert.slice(1);
+  }
+
+  editor.value = before + insert + after;
+  const pos = start + insert.length;
+  editor.setSelectionRange(pos, pos);
+  editor.focus();
+  render();
+
+  // Visual feedback flash
+  editor.classList.remove('flashing');
+  void editor.offsetWidth; // force reflow
+  editor.classList.add('flashing');
+  setTimeout(() => editor.classList.remove('flashing'), 380);
+}
+
+/* ─────────────────────────────────────────────
+   Category collapse / expand
+───────────────────────────────────────────── */
+document.querySelectorAll('.cat-label').forEach(label => {
+  label.addEventListener('click', () => {
+    label.closest('.cat').classList.toggle('collapsed');
+  });
+});
+
+document.querySelectorAll('.block[data-id]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.id;
+    if (BLOCKS[id] !== undefined) insertAtCursor(BLOCKS[id]);
+  });
+});
+
+/* ─────────────────────────────────────────────
+   Default content (starter document)
+───────────────────────────────────────────── */
+editor.value = `# Welcome to markpad ●
+
+A live Markdown editor with a **syntax block palette** — click any block on the left to insert it at your cursor position.
+
+---
+
+## Supported Syntax
+
+**Bold text**, *italic text*, ***bold italic***, and ~~strikethrough~~.
+Use \`inline code\` for short snippets, or a full code block:
+
+\`\`\`javascript
+function greet(name) {
+  return \`Hello, \${name}!\`;
+}
+console.log(greet("world"));
+\`\`\`
+
+### Lists
+
+- Apples
+- Oranges
+- Bananas
+
+1. Write your content
+2. Watch it render live
+3. Copy the preview whenever ready
+
+### Blockquotes
+
+> "Any sufficiently advanced technology is indistinguishable from magic."
+> — Arthur C. Clarke
+
+---
+
+Links: [Visit Anthropic](https://anthropic.com) · Made with **markpad**
+`;
+
+render();
+</script>
+</body>
+</html>
